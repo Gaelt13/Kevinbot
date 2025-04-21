@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from discord.ui import View, Button, Modal, TextInput
 import asyncio
+import os
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -138,3 +139,6 @@ async def on_voice_state_update(member, before, after):
                 await before.channel.delete()
                 canales_temporales.pop(before.channel.id, None)
                 print(f'🗑️ Canal eliminado: {before.channel.name}')
+
+TOKEN = os.getenv("DISCORD_TOKEN")
+bot.run(TOKEN)
