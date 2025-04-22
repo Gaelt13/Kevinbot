@@ -71,9 +71,8 @@ async def crearvoz(ctx):
     canal = await ctx.guild.create_voice_channel(nombre_canal, overwrites=overwrites)
     canales_temporales[canal.id] = ctx.author.id
 
-    # Esperamos a que Discord cree el chat de texto automáticamente
-    await asyncio.sleep(2)  # Esto es importante para asegurarnos de que .text esté disponible
-    text_channel = canal.text if hasattr(canal, 'text') else None
+    # Crear un canal de texto asociado
+    text_channel = await ctx.guild.create_text_channel(f"text-{nombre_usuario}", overwrites=overwrites)
 
     embed = discord.Embed(
         title="🔊 Nuevo Canal de Voz",
@@ -85,12 +84,9 @@ async def crearvoz(ctx):
 
     view = ControlLimiteView(canal, ctx.author.id, limite_inicial=2)
 
-    if text_channel:
-        mensaje = await text_channel.send(embed=embed, view=view)
-        view.message = mensaje
-    else:
-        mensaje = await ctx.send(embed=embed, view=view)
-        view.message = mensaje
+    # Enviar el embed en el canal de texto creado
+    mensaje = await text_channel.send(embed=embed, view=view)
+    view.message = mensaje
 
     # Mover al creador si está en un canal de voz
     if ctx.author.voice and ctx.author.voice.channel:
