@@ -229,4 +229,5 @@ async def on_voice_state_update(member, before, after):
 
         await canal_temporal.send(embed=embed, view=view)
 
-bot.run(os.getenv("TOKEN"))
+TOKEN = os.getenv("DISCORD_TOKEN")
+bot.run(TOKEN)
