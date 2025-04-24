@@ -1,83 +1,129 @@
 import discord
 from discord.ext import commands
-from discord.ui import View, Button
+from discord.ui import View, Button, Select
 import asyncio
 import os
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix='!', intents=intents)
 canales_temporales = {}
-preferencias_idioma = {}  # usuario_id -> idioma
+preferencias_idioma = {}  # Guardar idioma por usuario
 
-LOBBY_VOICE_ID = 1252337087102058516
-IDIOMAS = ["es", "en", "pt", "jp"]
+# Idiomas soportados
+IDIOMAS = {
+    'es': 'Español',
+    'en': 'English',
+    'pt': 'Português',
+    'ja': '日本語'
+}
 
-TRADUCCIONES = {
-    "es": {
-        "embed_title": "🎛️ Control del Canal de Voz",
-        "embed_desc": "**Canal:** {nombre}\n**Límite de usuarios:** {limite}",
-        "btn_up": "🔼",
-        "btn_down": "🔽",
-        "btn_delete": "❌ Eliminar canal",
-        "btn_rename": "✏️ Renombrar",
-        "btn_help": "❓ Ayuda",
-        "btn_lang": "🌍 Idioma",
-        "msg_delete": "🗑️ Canal eliminado.",
-        "msg_perm_denied": "❌ Solo el creador del canal o un admin puede usar estos botones.",
-        "embed_help_title": "📘 Ayuda del canal dinámico",
-        "embed_help_desc": "Puedes controlar este canal con los siguientes botones..."
+# Textos traducidos para botones y mensajes
+TEXTOS = {
+    "no_autor": {
+        "es": "❌ Solo el creador del canal puede cambiar el idioma.",
+        "en": "❌ Only the channel creator can change the language.",
+        "pt": "❌ Apenas o criador do canal pode mudar o idioma.",
+        "ja": "❌ チャンネルの作成者のみが言語を変更できます。"
     },
-    "en": {
-        "embed_title": "🎛️ Voice Channel Control",
-        "embed_desc": "**Channel:** {nombre}\n**User limit:** {limite}",
-        "btn_up": "🔼",
-        "btn_down": "🔽",
-        "btn_delete": "❌ Delete Channel",
-        "btn_rename": "✏️ Rename",
-        "btn_help": "❓ Help",
-        "btn_lang": "🌍 Language",
-        "msg_delete": "🗑️ Channel deleted.",
-        "msg_perm_denied": "❌ Only the channel creator or an admin can use these buttons.",
-        "embed_help_title": "📘 Dynamic Channel Help",
-        "embed_help_desc": "You can control this channel using the following buttons..."
+    "canal_eliminado": {
+        "es": "🗑️ Canal eliminado.",
+        "en": "🗑️ Channel deleted.",
+        "pt": "🗑️ Canal deletado.",
+        "ja": "🗑️ チャンネルが削除されました。"
     },
-    "pt": {
-        "embed_title": "🎛️ Controle do Canal de Voz",
-        "embed_desc": "**Canal:** {nombre}\n**Limite de usuários:** {limite}",
-        "btn_up": "🔼",
-        "btn_down": "🔽",
-        "btn_delete": "❌ Excluir canal",
-        "btn_rename": "✏️ Renomear",
-        "btn_help": "❓ Ajuda",
-        "btn_lang": "🌍 Idioma",
-        "msg_delete": "🗑️ Canal excluído.",
-        "msg_perm_denied": "❌ Apenas o criador ou um admin pode usar esses botões.",
-        "embed_help_title": "📘 Ajuda do Canal Dinâmico",
-        "embed_help_desc": "Você pode controlar este canal usando os botões abaixo..."
+    "ayuda": {
+        "es": "Este bot crea canales de voz temporales automáticamente al unirte al canal lobby.",
+        "en": "This bot automatically creates temporary voice channels when you join the lobby channel.",
+        "pt": "Este bot cria canais de voz temporários automaticamente ao entrar no canal do lobby.",
+        "ja": "このボットは、ロビーチャンネルに参加すると一時的なボイスチャンネルを自動的に作成します。"
     },
-    "jp": {
-        "embed_title": "🎛️ ボイスチャンネルコントロール",
-        "embed_desc": "**チャンネル:** {nombre}\n**ユーザー制限:** {limite}",
-        "btn_up": "🔼",
-        "btn_down": "🔽",
-        "btn_delete": "❌ チャンネル削除",
-        "btn_rename": "✏️ 名前変更",
-        "btn_help": "❓ ヘルプ",
-        "btn_lang": "🌍 言語",
-        "msg_delete": "🗑️ チャンネルが削除されました。",
-        "msg_perm_denied": "❌ 作成者または管理者のみが使用できます。",
-        "embed_help_title": "📘 ダイナミックチャンネルのヘルプ",
-        "embed_help_desc": "以下のボタンでチャンネルを管理できます..."
+    "eliminar": {
+        "es": "❌ Eliminar canal",
+        "en": "❌ Delete Channel",
+        "pt": "❌ Deletar Canal",
+        "ja": "❌ チャンネルを削除"
     }
 }
 
-def get_idioma(user_id):
-    return preferencias_idioma.get(user_id, "es")
+# ID del canal "lobby" que activará la creación de canales temporales (cámbialo al tuyo)
+LOBBY_VOICE_ID = 1252337087102058516
 
-def get_text(user_id, key, **kwargs):
-    idioma = get_idioma(user_id)
-    texto = TRADUCCIONES[idioma][key]
-    return texto.format(**kwargs)
+@bot.event
+async def on_ready():
+    print(f'✅ Bot conectado como {bot.user}')
+
+def traducir_embed(idioma, canal, autor, limite, estado="Público", region="Automática"):
+    textos = {
+        'es': {
+            'title': '🌀 Administra tu Canal Temporal',
+            'desc': 'Controla y personaliza tu canal como prefieras.',
+            'owner': '👑 Dueño del Canal',
+            'name': '🔊 Nombre del Canal',
+            'limit': '✋ Límite de Usuarios',
+            'region': '🌎 Región',
+            'state': '🌐 Estado',
+            'created': f'Creado por {autor.display_name}'
+        },
+        'en': {
+            'title': '🌀 Manage your Dynamic Channel',
+            'desc': 'Take control of your channel and customize it.',
+            'owner': '👑 Channel Owner',
+            'name': '🔊 Channel Name',
+            'limit': '✋ User Limit',
+            'region': '🌎 Region',
+            'state': '🌐 State',
+            'created': f'Created by {autor.display_name}'
+        },
+        'pt': {
+            'title': '🌀 Gerencie seu Canal Temporário',
+            'desc': 'Controle e personalize seu canal como preferir.',
+            'owner': '👑 Dono do Canal',
+            'name': '🔊 Nome do Canal',
+            'limit': '✋ Limite de Usuários',
+            'region': '🌎 Região',
+            'state': '🌐 Estado',
+            'created': f'Criado por {autor.display_name}'
+        },
+        'ja': {
+            'title': '🌀 一時的なチャンネルを管理',
+            'desc': 'チャンネルを自由にカスタマイズしましょう。',
+            'owner': '👑 チャンネル所有者',
+            'name': '🔊 チャンネル名',
+            'limit': '✋ ユーザー制限',
+            'region': '🌎 リージョン',
+            'state': '🌐 状態',
+            'created': f'{autor.display_name} により作成'
+        }
+    }
+    t = textos.get(idioma, textos['es'])
+    embed = discord.Embed(title=t['title'], description=t['desc'], color=discord.Color.blurple())
+    embed.add_field(name=t['owner'], value=f"<@{autor.id}>", inline=False)
+    embed.add_field(name=t['name'], value=canal.name, inline=False)
+    embed.add_field(name=t['limit'], value=f"{limite if limite > 0 else '∞'}", inline=False)
+    embed.add_field(name=t['region'], value=region, inline=True)
+    embed.add_field(name=t['state'], value=estado, inline=True)
+    embed.set_footer(text=t['created'])
+    return embed
+
+class IdiomaSelect(Select):
+    def __init__(self, autor_id, canal, view):
+        self.autor_id = autor_id
+        self.canal = canal
+        self.view = view
+        options = [
+            discord.SelectOption(label=nombre, value=code)
+            for code, nombre in IDIOMAS.items()
+        ]
+        super().__init__(placeholder="🌍 Cambiar idioma", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.autor_id:
+            idioma = preferencias_idioma.get(interaction.user.id, 'es')
+            await interaction.response.send_message(TEXTOS["no_autor"][idioma], ephemeral=True)
+            return
+        preferencias_idioma[self.autor_id] = self.values[0]
+        embed_actualizado = traducir_embed(self.values[0], self.canal, interaction.user, self.view.limite)
+        await interaction.response.edit_message(embed=embed_actualizado, view=self.view)
 
 class ControlLimiteView(View):
     def __init__(self, canal, autor_id, limite_inicial=2):
@@ -85,83 +131,38 @@ class ControlLimiteView(View):
         self.canal = canal
         self.autor_id = autor_id
         self.limite = limite_inicial
-        self.update_labels()
-
-    def update_labels(self):
-        idioma = get_idioma(self.autor_id)
-        self.children[0].label = TRADUCCIONES[idioma]['btn_up']
-        self.children[1].label = TRADUCCIONES[idioma]['btn_down']
-        self.children[2].label = TRADUCCIONES[idioma]['btn_delete']
-        self.children[3].label = TRADUCCIONES[idioma]['btn_rename']
-        self.children[4].label = TRADUCCIONES[idioma]['btn_help']
-        self.children[5].label = TRADUCCIONES[idioma]['btn_lang']
+        self.estado = "Público"
+        self.region = "Automática"
+        self.add_item(IdiomaSelect(autor_id, canal, self))
 
     async def interaction_check(self, interaction: discord.Interaction):
-        if interaction.user.id == self.autor_id or interaction.user.guild_permissions.administrator:
-            return True
-        await interaction.response.send_message(get_text(interaction.user.id, "msg_perm_denied"), ephemeral=True)
-        return False
+        return interaction.user.id == self.autor_id or interaction.user.guild_permissions.administrator
 
-    @discord.ui.button(label="", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🔼", style=discord.ButtonStyle.secondary)
     async def aumentar(self, interaction: discord.Interaction, button: Button):
         if self.limite < 99:
             self.limite += 1
             await self.canal.edit(user_limit=self.limite)
             await self.actualizar_embed(interaction)
 
-    @discord.ui.button(label="", style=discord.ButtonStyle.secondary)
+    @discord.ui.button(label="🔽", style=discord.ButtonStyle.secondary)
     async def disminuir(self, interaction: discord.Interaction, button: Button):
         if self.limite > 0:
             self.limite -= 1
             await self.canal.edit(user_limit=self.limite)
             await self.actualizar_embed(interaction)
 
-    @discord.ui.button(label="", style=discord.ButtonStyle.danger)
+    @discord.ui.button(label=TEXTOS["eliminar"]["es"], style=discord.ButtonStyle.danger, custom_id="eliminar")
     async def eliminar(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message(get_text(interaction.user.id, "msg_delete"), ephemeral=True)
+        idioma = preferencias_idioma.get(interaction.user.id, 'es')
+        await interaction.response.send_message(TEXTOS["canal_eliminado"][idioma], ephemeral=True)
         if self.canal.id in canales_temporales:
             del canales_temporales[self.canal.id]
         await self.canal.delete()
 
-    @discord.ui.button(label="", style=discord.ButtonStyle.primary)
-    async def renombrar(self, interaction: discord.Interaction, button: Button):
-        await interaction.response.send_message("✏️ Ingresa el nuevo nombre del canal:", ephemeral=True)
-
-        def check(m):
-            return m.author.id == interaction.user.id and m.channel == interaction.channel
-
-        try:
-            msg = await bot.wait_for("message", check=check, timeout=30)
-            await self.canal.edit(name=msg.content)
-            await msg.delete()
-            await self.actualizar_embed(interaction)
-        except asyncio.TimeoutError:
-            await interaction.followup.send("⌛ Tiempo agotado para renombrar.", ephemeral=True)
-
-    @discord.ui.button(label="", style=discord.ButtonStyle.secondary)
-    async def ayuda(self, interaction: discord.Interaction, button: Button):
-        embed = discord.Embed(
-            title=get_text(interaction.user.id, "embed_help_title"),
-            description=get_text(interaction.user.id, "embed_help_desc"),
-            color=discord.Color.blurple()
-        )
-        await interaction.response.send_message(embed=embed, ephemeral=True)
-
-    @discord.ui.button(label="", style=discord.ButtonStyle.secondary)
-    async def cambiar_idioma(self, interaction: discord.Interaction, button: Button):
-        actual = get_idioma(interaction.user.id)
-        idx = (IDIOMAS.index(actual) + 1) % len(IDIOMAS)
-        nuevo = IDIOMAS[idx]
-        preferencias_idioma[interaction.user.id] = nuevo
-        self.update_labels()
-        await self.actualizar_embed(interaction)
-
     async def actualizar_embed(self, interaction):
-        embed = discord.Embed(
-            title=get_text(self.autor_id, "embed_title"),
-            description=get_text(self.autor_id, "embed_desc", nombre=self.canal.name, limite="✋ Ilimitado" if self.limite == 0 else self.limite),
-            color=discord.Color.blurple()
-        )
+        idioma = preferencias_idioma.get(self.autor_id, 'es')
+        embed = traducir_embed(idioma, self.canal, interaction.user, self.limite)
         await interaction.response.edit_message(embed=embed, view=self)
 
 @bot.event
@@ -183,16 +184,16 @@ async def on_voice_state_update(member, before, after):
             "autor": member.id,
             "creado_en": discord.utils.utcnow()
         }
-
         webhook = await canal_temporal.create_webhook(name="Dynamic Voice")
+        idioma = preferencias_idioma.get(member.id, 'es')
         view = ControlLimiteView(canal_temporal, member.id)
-        embed = discord.Embed(
-            title=get_text(member.id, "embed_title"),
-            description=get_text(member.id, "embed_desc", nombre=canal_temporal.name, limite=2),
-            color=discord.Color.green()
+        embed = traducir_embed(idioma, canal_temporal, member, view.limite)
+        await webhook.send(
+            embed=embed,
+            view=view,
+            username=f"{bot.user.name}",
+            avatar_url=bot.user.avatar.url
         )
-        embed.set_footer(text=f"Creado por {member.display_name}")
-        await webhook.send(embed=embed, view=view, username=bot.user.name, avatar_url=bot.user.avatar.url)
         await webhook.delete()
 
     if before.channel and before.channel.id in canales_temporales:
@@ -201,6 +202,16 @@ async def on_voice_state_update(member, before, after):
             if len(before.channel.members) == 0:
                 await before.channel.delete()
                 del canales_temporales[before.channel.id]
+
+@bot.command()
+async def ayuda(ctx):
+    idioma = preferencias_idioma.get(ctx.author.id, 'es')
+    embed = discord.Embed(
+        title="🆘 Ayuda / Help",
+        description=TEXTOS["ayuda"][idioma],
+        color=discord.Color.blue()
+    )
+    await ctx.send(embed=embed)
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)
