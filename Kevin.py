@@ -188,11 +188,12 @@ async def on_voice_state_update(member, before, after):
         idioma = preferencias_idioma.get(member.id, 'es')
         view = ControlLimiteView(canal_temporal, member.id)
         embed = traducir_embed(idioma, canal_temporal, member, view.limite)
+        avatar_url = bot.user.avatar.url if bot.user.avatar else None
         await webhook.send(
             embed=embed,
             view=view,
             username=f"{bot.user.name}",
-            avatar_url=bot.user.avatar.url
+            avatar_url=avatar_url
         )
         await webhook.delete()
 
