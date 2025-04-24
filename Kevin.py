@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-from discord.ui import View, Button, Select
+from discord.ui import View, Button
 import asyncio
 import os
 
@@ -79,42 +79,6 @@ def get_text(user_id, key, **kwargs):
     texto = TRADUCCIONES[idioma][key]
     return texto.format(**kwargs)
 
-class IdiomaSelect(Select):
-    def __init__(self, autor_id):
-        options = [
-            discord.SelectOption(label="Español", value="es"),
-            discord.SelectOption(label="English", value="en"),
-            discord.SelectOption(label="Português", value="pt"),
-            discord.SelectOption(label="日本語", value="jp")
-        ]
-        super().__init__(placeholder="Selecciona un idioma...", options=options)
-        self.autor_id = autor_id
-
-    async def callback(self, interaction: discord.Interaction):
-        nuevo_idioma = self.values[0]
-        preferencias_idioma[self.autor_id] = nuevo_idioma
-        await interaction.response.send_message(f"Idioma cambiado a {TRADUCCIONES[nuevo_idioma]['btn_lang']}", ephemeral=True)
-
-        # Actualizar el embed con el nuevo idioma
-        await self.actualizar_embed(interaction)
-
-    async def actualizar_embed(self, interaction):
-        # Obtener la información del canal y los botones actualizados
-        canal_temporal = discord.utils.get(interaction.guild.voice_channels, id=interaction.channel.id)
-        if canal_temporal:
-            embed = discord.Embed(
-                title=get_text(self.autor_id, "embed_title"),
-                description=get_text(self.autor_id, "embed_desc", nombre=canal_temporal.name, limite=2),
-                color=discord.Color.blurple()
-            )
-
-            # Actualizar la vista de los botones con el nuevo idioma
-            view = ControlLimiteView(canal_temporal, self.autor_id)
-            view.update_labels()
-
-            # Editar el mensaje con el nuevo embed y los botones traducidos
-            await interaction.response.edit_message(embed=embed, view=view)
-
 class ControlLimiteView(View):
     def __init__(self, canal, autor_id, limite_inicial=2):
         super().__init__(timeout=None)
@@ -185,15 +149,17 @@ class ControlLimiteView(View):
 
     @discord.ui.button(label="", style=discord.ButtonStyle.secondary)
     async def cambiar_idioma(self, interaction: discord.Interaction, button: Button):
-        select_menu = IdiomaSelect(self.autor_id)
-        view = View()
-        view.add_item(select_menu)
-        await interaction.response.send_message("Selecciona un idioma:", view=view, ephemeral=True)
+        actual = get_idioma(interaction.user.id)
+        idx = (IDIOMAS.index(actual) + 1) % len(IDIOMAS)
+        nuevo = IDIOMAS[idx]
+        preferencias_idioma[interaction.user.id] = nuevo
+        self.update_labels()
+        await self.actualizar_embed(interaction)
 
     async def actualizar_embed(self, interaction):
         embed = discord.Embed(
             title=get_text(self.autor_id, "embed_title"),
-            description=get_text(self.autor_id, "embed_desc", nombre=self.canal.name, limite=2),
+            description=get_text(self.autor_id, "embed_desc", nombre=self.canal.name, limite="✋ Ilimitado" if self.limite == 0 else self.limite),
             color=discord.Color.blurple()
         )
         await interaction.response.edit_message(embed=embed, view=self)
@@ -220,12 +186,21 @@ async def on_voice_state_update(member, before, after):
 
         webhook = await canal_temporal.create_webhook(name="Dynamic Voice")
         view = ControlLimiteView(canal_temporal, member.id)
-
         embed = discord.Embed(
             title=get_text(member.id, "embed_title"),
             description=get_text(member.id, "embed_desc", nombre=canal_temporal.name, limite=2),
-            color=discord.Color.blurple()
+            color=discord.Color.green()
         )
+        embed.set_footer(text=f"Creado por {member.display_name}")
+        await webhook.send(embed=embed, view=view, username=bot.user.name, avatar_url=bot.user.avatar.url)
+        await webhook.delete()
+
+    if before.channel and before.channel.id in canales_temporales:
+        if len(before.channel.members) == 0:
+            await asyncio.sleep(5)
+            if len(before.channel.members) == 0:
+                await before.channel.delete()
+                del canales_temporales[before.channel.id]
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-bot.run(TOKEN)
+bot.run(TOKEN)  
