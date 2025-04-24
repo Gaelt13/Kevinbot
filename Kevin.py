@@ -95,6 +95,25 @@ class IdiomaSelect(Select):
         preferencias_idioma[self.autor_id] = nuevo_idioma
         await interaction.response.send_message(f"Idioma cambiado a {TRADUCCIONES[nuevo_idioma]['btn_lang']}", ephemeral=True)
 
+        # Actualizar el embed con el nuevo idioma
+        await self.actualizar_embed(interaction)
+
+    async def actualizar_embed(self, interaction):
+        # Obtener la información necesaria para crear el embed
+        canal_temporal = discord.utils.get(interaction.guild.voice_channels, id=interaction.channel.id)
+        if canal_temporal:
+            embed = discord.Embed(
+                title=get_text(self.autor_id, "embed_title"),
+                description=get_text(self.autor_id, "embed_desc", nombre=canal_temporal.name, limite=2),
+                color=discord.Color.blurple()
+            )
+            # Actualizar la vista de los botones con el nuevo idioma
+            view = ControlLimiteView(canal_temporal, self.autor_id)
+            view.update_labels()
+
+            # Editar el mensaje con el nuevo embed
+            await interaction.response.edit_message(embed=embed, view=view)
+
 class ControlLimiteView(View):
     def __init__(self, canal, autor_id, limite_inicial=2):
         super().__init__(timeout=None)
@@ -173,7 +192,7 @@ class ControlLimiteView(View):
     async def actualizar_embed(self, interaction):
         embed = discord.Embed(
             title=get_text(self.autor_id, "embed_title"),
-            description=get_text(self.autor_id, "embed_desc", nombre=self.canal.name, limite="✋ Ilimitado" if self.limite == 0 else self.limite),
+            description=get_text(self.autor_id, "embed_desc", nombre=self.canal.name, limite=2),
             color=discord.Color.blurple()
         )
         await interaction.response.edit_message(embed=embed, view=self)
