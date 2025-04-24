@@ -99,7 +99,7 @@ class IdiomaSelect(Select):
         await self.actualizar_embed(interaction)
 
     async def actualizar_embed(self, interaction):
-        # Obtener la información necesaria para crear el embed
+        # Obtener la información del canal y los botones actualizados
         canal_temporal = discord.utils.get(interaction.guild.voice_channels, id=interaction.channel.id)
         if canal_temporal:
             embed = discord.Embed(
@@ -107,11 +107,12 @@ class IdiomaSelect(Select):
                 description=get_text(self.autor_id, "embed_desc", nombre=canal_temporal.name, limite=2),
                 color=discord.Color.blurple()
             )
+
             # Actualizar la vista de los botones con el nuevo idioma
             view = ControlLimiteView(canal_temporal, self.autor_id)
             view.update_labels()
 
-            # Editar el mensaje con el nuevo embed
+            # Editar el mensaje con el nuevo embed y los botones traducidos
             await interaction.response.edit_message(embed=embed, view=view)
 
 class ControlLimiteView(View):
@@ -219,21 +220,13 @@ async def on_voice_state_update(member, before, after):
 
         webhook = await canal_temporal.create_webhook(name="Dynamic Voice")
         view = ControlLimiteView(canal_temporal, member.id)
+
         embed = discord.Embed(
             title=get_text(member.id, "embed_title"),
             description=get_text(member.id, "embed_desc", nombre=canal_temporal.name, limite=2),
-            color=discord.Color.green()
+            color=discord.Color.blurple()
         )
-        embed.set_footer(text=f"Creado por {member.display_name}")
-        await webhook.send(embed=embed, view=view, username=bot.user.name, avatar_url=bot.user.avatar.url)
-        await webhook.delete()
 
-    if before.channel and before.channel.id in canales_temporales:
-        if len(before.channel.members) == 0:
-            await asyncio.sleep(5)
-            if len(before.channel.members) == 0:
-                await before.channel.delete()
-                del canales_temporales[before.channel.id]
+        await canal_temporal.send(embed=embed, view=view)
 
-TOKEN = os.getenv("DISCORD_TOKEN")
-bot.run(TOKEN)
+bot.run(os.getenv("TOKEN"))
