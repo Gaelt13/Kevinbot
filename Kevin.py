@@ -227,7 +227,5 @@ async def on_voice_state_update(member, before, after):
             color=discord.Color.blurple()
         )
 
-        await canal_temporal.send(embed=embed, view=view)
-
 TOKEN = os.getenv("DISCORD_TOKEN")
 bot.run(TOKEN)
